@@ -8,19 +8,19 @@ A high-performance, full-stack **Graph Analytics Engine** built entirely from sc
 
 ## Features
 
-### 🧠 Core Graph Algorithms
+### Core Graph Algorithms
 Implemented using the Strategy Design Pattern for robust and extensible architecture:
 - **Dijkstra's Algorithm:** Calculates the shortest path between nodes using an optimized Priority Queue.
 - **A\* Search Algorithm:** Enhances pathfinding speed by utilizing Euclidean spatial heuristics based on node coordinates.
 - **PageRank:** Evaluates node importance iteratively, correctly handling graph equilibrium and damping factors.
 - **Louvain Community Detection:** A fast modularity optimization heuristic that clusters interconnected nodes into identified communities.
 
-### 🏗️ Advanced Data Structures
+### Advanced Data Structures
 - Built completely custom `Node`, `Edge`, and `Graph` domain models.
 - Utilizes an **Adjacency List** graph representation for highly efficient neighbor lookups during algorithm execution.
 - Employs thread-safe Java collections (`ConcurrentHashMap`, `CopyOnWriteArrayList`) to support safe concurrent data traversal and ingestion.
 
-### 💻 Interactive Visualization Layer
+### Interactive Visualization Layer
 - A stunning **Vue 3 + Vite** frontend interface featuring a sleek, dark-mode glassmorphism aesthetic.
 - A custom-built HTML5 Interactive Canvas allowing users to manually plot spatial nodes and organically connect paths in real-time.
 - Live pathfinding highlights calculate visually across the canvas instantly via asynchronous REST API calls to the backend engine.
