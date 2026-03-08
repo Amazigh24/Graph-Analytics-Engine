@@ -1,6 +1,8 @@
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue';
+import { ref, onMounted, onUnmounted, watch } from 'vue';
 import axios from 'axios';
+
+const emit = defineEmits(['graph-updated', 'algorithm-complete']);
 
 const canvas = ref(null);
 const ctx = ref(null);
@@ -28,7 +30,7 @@ onMounted(async () => {
         resizeCanvas();
         animate();
     }
-    await createGraph();
+    await seedRandomGraph(); // Instantly seed to avoid blank canvas
 });
 
 onUnmounted(() => {
@@ -163,8 +165,8 @@ const handleCanvasClick = (e) => {
             x: x,
             y: y
         });
+        emit('graph-updated', nodes.value);
         
-        // Push node to backend is implicit in edge creation, but let's push it with an edge to itself to register it if needed, or backend auto-creates on edge addition!
         selectedNodeId.value = null;
     }
     
@@ -197,23 +199,57 @@ const createEdge = async (sourceId, targetId) => {
     }
 };
 
-const runAlgorithm = async (algo) => {
+const lastExecutionTime = ref(null);
+
+const runAlgorithm = async (algo, explicitSourceId, explicitTargetId) => {
     if (!graphId.value || nodes.value.length < 2) return;
     
-    const sourceNode = nodes.value[0].id;
-    const targetNode = nodes.value[nodes.value.length - 1].id;
+    // Use explicit IDs from UI, fallback to array bounds if undefined (e.g. testing)
+    const sourceNode = explicitSourceId || nodes.value[0].id;
+    const targetNode = explicitTargetId || nodes.value[nodes.value.length - 1].id;
     
     try {
-        const url = `${apiBase}/${graphId.value}/algorithms/shortest-path/${algo}`;
-        const response = await axios.post(url, null, {
-            params: { source: sourceNode, target: targetNode }
+        let url = `${apiBase}/${graphId.value}/algorithms/`;
+        // Map frontend selection to correct backend path
+        if (algo === 'dijkstra') url += `shortest-path/dijkstra?source=${sourceNode}&target=${targetNode}`;
+        if (algo === 'astar') url += `shortest-path/astar?source=${sourceNode}&target=${targetNode}`;
+        if (algo === 'bfs') url += `traversal/bfs?source=${sourceNode}`;
+        if (algo === 'dfs') url += `traversal/dfs?source=${sourceNode}`;
+        if (algo === 'pagerank') url += `pagerank`;
+        if (algo === 'louvain') url += `community/louvain`;
+        if (algo === 'closeness') url += `centrality/closeness`;
+        if (algo === 'betweenness') url += `centrality/betweenness`;
+
+        const response = await axios.post(url);
+        
+        // Extract from AlgorithmResultWrapper
+        const resultData = response.data.result;
+        lastExecutionTime.value = response.data.executionTimeMs;
+        
+        if (algo === 'dijkstra' || algo === 'astar') {
+            pathNodeIds.value = resultData.pathNodeIds;
+            console.log("Path:", pathNodeIds.value);
+        } else if (algo === 'bfs' || algo === 'dfs') {
+            pathNodeIds.value = resultData; // It returns a list of nodes
+            console.log("Traversal Order:", pathNodeIds.value);
+        } else {
+             // For pageRank, Louvain, Centrality - we'll just flash them to show completion since they return Maps (NodeID -> Value/Community)
+             pathNodeIds.value = nodes.value.map(n => n.id); 
+             console.log("Algorithm Result:", resultData);
+        }
+
+        // Notify parent UI
+        emit('algorithm-complete', {
+            algo: algo,
+            time: response.data.executionTimeMs,
+            result: resultData
         });
-        pathNodeIds.value = response.data.pathNodeIds;
-        console.log("Path:", pathNodeIds.value);
+
     } catch (e) {
         console.error("Algo Failed", e);
         pathNodeIds.value = [];
-        alert("Path not found or error occurred.");
+        lastExecutionTime.value = null;
+        alert("Algorithm failed or encountered an error (Check console).");
     }
 };
 
@@ -222,10 +258,102 @@ const clearGraph = async () => {
     edges.value = [];
     pathNodeIds.value = [];
     selectedNodeId.value = null;
+    lastExecutionTime.value = null;
     await createGraph();
 };
 
-defineExpose({ runAlgorithm, clearGraph });
+const scatterNodes = (serverNodes) => {
+    const positions = [];
+    const minDistance = 45; // Prevent collision explicitly
+    const maxAttempts = 500;
+    
+    // Estimate bounds safely if canvas isn't fully drawn yet
+    let w = (canvas.value && canvas.value.width > 200) ? canvas.value.width : 800;
+    let h = (canvas.value && canvas.value.height > 200) ? canvas.value.height : 600;
+
+    return serverNodes.map((n) => {
+        let x, y;
+        let attempt = 0;
+        let validPosition = false;
+        
+        while (!validPosition && attempt < maxAttempts) {
+            x = 40 + Math.random() * (w - 80);
+            y = 40 + Math.random() * (h - 80);
+            
+            validPosition = true;
+            for (const pos of positions) {
+                const dx = x - pos.x;
+                const dy = y - pos.y;
+                if (Math.sqrt(dx*dx + dy*dy) < minDistance) {
+                    validPosition = false;
+                    break;
+                }
+            }
+            attempt++;
+        }
+        positions.push({x, y});
+        
+        return {
+            id: n.id,
+            label: n.id.substring(0,4),
+            x: x,
+            y: y
+        };
+    });
+};
+
+const seedRandomGraph = async () => {
+    try {
+        const response = await axios.post(`${apiBase}/seed/random?nodes=30&edges=60`);
+        graphId.value = response.data.id;
+        console.log("Seeded Graph ID:", graphId.value);
+        
+        // Fetch nodes and edges to render them
+        const nodesReq = await axios.get(`${apiBase}/${graphId.value}/nodes`);
+        const edgesReq = await axios.get(`${apiBase}/${graphId.value}/edges`);
+        
+        // Use scatter logic to prevent overlapping nodes
+        nodes.value = scatterNodes(nodesReq.data);
+        
+        edges.value = edgesReq.data.map(e => ({
+            source: e.sourceId,
+            target: e.targetId,
+            weight: e.weight
+        }));
+        
+        pathNodeIds.value = [];
+        selectedNodeId.value = null;
+        lastExecutionTime.value = null;
+        
+        emit('graph-updated', nodes.value);
+
+    } catch (e) {
+        console.error("Failed to seed graph", e);
+        alert("Failed to generate random graph. Is backend running?");
+    }
+}
+
+const loadGraphId = async (id) => {
+    graphId.value = id;
+    try {
+        const nodesReq = await axios.get(`${apiBase}/${graphId.value}/nodes`);
+        const edgesReq = await axios.get(`${apiBase}/${graphId.value}/edges`);
+        
+        // Use scatter logic
+        nodes.value = scatterNodes(nodesReq.data);
+        
+        edges.value = edgesReq.data.map(e => ({
+            source: e.sourceId, target: e.targetId, weight: e.weight
+        }));
+        
+        emit('graph-updated', nodes.value);
+        pathNodeIds.value = []; selectedNodeId.value = null; lastExecutionTime.value = null;
+    } catch (e) {
+        console.error("Load failed", e);
+    }
+}
+
+defineExpose({ runAlgorithm, clearGraph, seedRandomGraph, loadGraphId, lastExecutionTime, graphId });
 </script>
 
 <template>

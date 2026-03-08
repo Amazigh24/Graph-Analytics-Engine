@@ -2,7 +2,8 @@ package com.graphanalytics.domain;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.locks.ReadWriteLock;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 public class AdjacencyListGraph implements Graph {
 
@@ -13,6 +14,7 @@ public class AdjacencyListGraph implements Graph {
     private final Map<String, List<Edge>> incomingEdges = new ConcurrentHashMap<>();
 
     private boolean isDirected;
+    private final ReadWriteLock lock = new ReentrantReadWriteLock();
 
     public AdjacencyListGraph(boolean isDirected) {
         this.isDirected = isDirected;
@@ -20,58 +22,105 @@ public class AdjacencyListGraph implements Graph {
 
     @Override
     public void addNode(Node node) {
-        nodes.putIfAbsent(node.getId(), node);
-        adjacencyList.putIfAbsent(node.getId(), new CopyOnWriteArrayList<>());
-        incomingEdges.putIfAbsent(node.getId(), new CopyOnWriteArrayList<>());
+        lock.writeLock().lock();
+        try {
+            nodes.putIfAbsent(node.getId(), node);
+            adjacencyList.putIfAbsent(node.getId(), new ArrayList<>());
+            incomingEdges.putIfAbsent(node.getId(), new ArrayList<>());
+        } finally {
+            lock.writeLock().unlock();
+        }
     }
 
     @Override
     public void addEdge(String sourceId, String targetId, double weight) {
-        Node source = nodes.get(sourceId);
-        Node target = nodes.get(targetId);
+        lock.writeLock().lock();
+        try {
+            Node source = nodes.get(sourceId);
+            Node target = nodes.get(targetId);
 
-        if (source == null || target == null) {
-            throw new IllegalArgumentException("Source or target node does not exist in the graph");
+            if (source == null || target == null) {
+                throw new IllegalArgumentException("Source or target node does not exist in the graph");
+            }
+
+            Edge edge = new Edge(source, target, weight);
+            adjacencyList.get(sourceId).add(edge);
+            incomingEdges.get(targetId).add(edge);
+        } finally {
+            lock.writeLock().unlock();
         }
-
-        Edge edge = new Edge(source, target, weight);
-        adjacencyList.get(sourceId).add(edge);
-        incomingEdges.get(targetId).add(edge);
     }
 
     @Override
     public void addUndirectedEdge(String sourceId, String targetId, double weight) {
-        addEdge(sourceId, targetId, weight);
-        addEdge(targetId, sourceId, weight);
+        lock.writeLock().lock();
+        try {
+            addEdge(sourceId, targetId, weight);
+            addEdge(targetId, sourceId, weight);
+        } finally {
+            lock.writeLock().unlock();
+        }
     }
 
     @Override
     public Optional<Node> getNode(String id) {
-        return Optional.ofNullable(nodes.get(id));
+        lock.readLock().lock();
+        try {
+            return Optional.ofNullable(nodes.get(id));
+        } finally {
+            lock.readLock().unlock();
+        }
     }
 
     @Override
     public Collection<Node> getNodes() {
-        return Collections.unmodifiableCollection(nodes.values());
+        lock.readLock().lock();
+        try {
+            return Collections.unmodifiableCollection(new ArrayList<>(nodes.values()));
+        } finally {
+            lock.readLock().unlock();
+        }
     }
 
     @Override
     public List<Edge> getEdges(String nodeId) {
-        return Collections.unmodifiableList(adjacencyList.getOrDefault(nodeId, Collections.emptyList()));
+        lock.readLock().lock();
+        try {
+            List<Edge> edges = adjacencyList.get(nodeId);
+            return edges == null ? Collections.emptyList() : Collections.unmodifiableList(new ArrayList<>(edges));
+        } finally {
+            lock.readLock().unlock();
+        }
     }
 
     public List<Edge> getIncomingEdges(String nodeId) {
-        return Collections.unmodifiableList(incomingEdges.getOrDefault(nodeId, Collections.emptyList()));
+        lock.readLock().lock();
+        try {
+            List<Edge> edges = incomingEdges.get(nodeId);
+            return edges == null ? Collections.emptyList() : Collections.unmodifiableList(new ArrayList<>(edges));
+        } finally {
+            lock.readLock().unlock();
+        }
     }
 
     @Override
     public long getNodeCount() {
-        return nodes.size();
+        lock.readLock().lock();
+        try {
+            return nodes.size();
+        } finally {
+            lock.readLock().unlock();
+        }
     }
 
     @Override
     public long getEdgeCount() {
-        return adjacencyList.values().stream().mapToLong(List::size).sum();
+        lock.readLock().lock();
+        try {
+            return adjacencyList.values().stream().mapToLong(List::size).sum();
+        } finally {
+            lock.readLock().unlock();
+        }
     }
 
     public boolean isDirected() {

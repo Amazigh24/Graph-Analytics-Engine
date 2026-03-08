@@ -21,9 +21,14 @@ Implemented using the Strategy Design Pattern for robust and extensible architec
 - Employs thread-safe Java collections (`ConcurrentHashMap`, `CopyOnWriteArrayList`) to support safe concurrent data traversal and ingestion.
 
 ### Interactive Visualization Layer
+
+![Graph Analytics Interactive UI](ui_preview.png)
+
 - A stunning **Vue 3 + Vite** frontend interface featuring a sleek, dark-mode glassmorphism aesthetic.
-- A custom-built HTML5 Interactive Canvas allowing users to manually plot spatial nodes and organically connect paths in real-time.
-- Live pathfinding highlights calculate visually across the canvas instantly via asynchronous REST API calls to the backend engine.
+- A **3-Column Dashboard** consisting of a Controls Sidebar, an Interactive HTML5 Canvas, and a dynamic Results Panel.
+- **Force-Directed Graph Sowing:** Automatically seeds connected network components with bounds-aware spatial scattering algorithms to prevent layout collisions.
+- **Advanced Data Rendering:** Displays parsed graph metrics (PageRank fractions, Louvain community IDs, Betweenness rankings) mapped interactively in a sorted, scrollable Results dashboard.
+- Live pathfinding highlights calculate visually across the canvas instantly via concurrent REST API calls to the backend engine.
 
 ---
 

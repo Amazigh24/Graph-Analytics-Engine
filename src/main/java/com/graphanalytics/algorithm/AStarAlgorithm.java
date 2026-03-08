@@ -9,10 +9,12 @@ public class AStarAlgorithm implements GraphAlgorithm<PathResult> {
 
     private final String sourceId;
     private final String targetId;
+    private final AStarHeuristic heuristic;
 
-    public AStarAlgorithm(String sourceId, String targetId) {
+    public AStarAlgorithm(String sourceId, String targetId, AStarHeuristic heuristic) {
         this.sourceId = sourceId;
         this.targetId = targetId;
+        this.heuristic = heuristic != null ? heuristic : new EuclideanHeuristic();
     }
 
     @Override
@@ -32,7 +34,7 @@ public class AStarAlgorithm implements GraphAlgorithm<PathResult> {
         });
 
         gScore.put(sourceId, 0.0);
-        fScore.put(sourceId, heuristic(graph, sourceId, targetId));
+        fScore.put(sourceId, heuristic.calculate(graph, sourceId, targetId));
         openSet.add(new NodeDistance(sourceId, fScore.get(sourceId)));
 
         Set<String> closedSet = new HashSet<>();
@@ -59,7 +61,7 @@ public class AStarAlgorithm implements GraphAlgorithm<PathResult> {
                 if (tentativeGScore < gScore.get(neighborId)) {
                     previous.put(neighborId, currentId);
                     gScore.put(neighborId, tentativeGScore);
-                    double f = tentativeGScore + heuristic(graph, neighborId, targetId);
+                    double f = tentativeGScore + heuristic.calculate(graph, neighborId, targetId);
                     fScore.put(neighborId, f);
                     openSet.add(new NodeDistance(neighborId, f));
                 }
@@ -67,33 +69,6 @@ public class AStarAlgorithm implements GraphAlgorithm<PathResult> {
         }
 
         return new PathResult(Collections.emptyList(), Double.POSITIVE_INFINITY);
-    }
-
-    private double heuristic(AdjacencyListGraph graph, String nodeId, String targetId) {
-        // Implementation of heuristic.
-        // For spatial graphs, this would be Euclidean or Manhattan distance.
-        // Assuming coordinates are stored in node properties.
-        var nodeOpt = graph.getNode(nodeId);
-        var targetOpt = graph.getNode(targetId);
-
-        if (nodeOpt.isPresent() && targetOpt.isPresent()) {
-            var node = nodeOpt.get();
-            var target = targetOpt.get();
-
-            Object nx = node.getProperty("x");
-            Object ny = node.getProperty("y");
-            Object tx = target.getProperty("x");
-            Object ty = target.getProperty("y");
-
-            if (nx instanceof Number && ny instanceof Number && tx instanceof Number && ty instanceof Number) {
-                double dx = ((Number) nx).doubleValue() - ((Number) tx).doubleValue();
-                double dy = ((Number) ny).doubleValue() - ((Number) ty).doubleValue();
-                return Math.sqrt(dx * dx + dy * dy);
-            }
-        }
-
-        // Fallback or generic heuristic: returns 0 makes it behave like Dijkstra
-        return 0.0;
     }
 
     private PathResult reconstructPath(Map<String, String> previous, String current, double totalCost) {

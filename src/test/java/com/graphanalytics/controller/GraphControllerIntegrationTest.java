@@ -63,9 +63,10 @@ class GraphControllerIntegrationTest {
                                 .param("source", "A")
                                 .param("target", "C"))
                                 .andExpect(status().isOk())
-                                .andExpect(jsonPath("$.totalCost").value(3.0))
-                                .andExpect(jsonPath("$.pathNodeIds[0]").value("A"))
-                                .andExpect(jsonPath("$.pathNodeIds[1]").value("B"))
-                                .andExpect(jsonPath("$.pathNodeIds[2]").value("C"));
+                                .andExpect(jsonPath("$.result.totalCost").value(3.0))
+                                .andExpect(jsonPath("$.result.pathNodeIds[0]").value("A"))
+                                .andExpect(jsonPath("$.result.pathNodeIds[1]").value("B"))
+                                .andExpect(jsonPath("$.result.pathNodeIds[2]").value("C"))
+                                .andExpect(jsonPath("$.executionTimeMs").exists());
         }
 }
