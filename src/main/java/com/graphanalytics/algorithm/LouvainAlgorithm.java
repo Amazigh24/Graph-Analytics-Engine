@@ -47,7 +47,10 @@ public class LouvainAlgorithm implements GraphAlgorithm<Map<String, String>> {
             m += nodeDegree;
         }
 
-        m = m / 2.0; // Since each undirected edge is counted twice
+        // For undirected graphs, each edge is counted twice in the sum above
+        if (!graph.isDirected()) {
+            m = m / 2.0;
+        }
         if (m == 0) {
             return communities;
         }
@@ -67,26 +70,32 @@ public class LouvainAlgorithm implements GraphAlgorithm<Map<String, String>> {
                 // Remove node from its current community
                 tot.put(currentComm, tot.get(currentComm) - nodeWeight);
 
-                String bestComm = currentComm;
-                double maxModularityGain = 0.0;
-
-                // Calculate weight of edges from node to other communities
+                // Calculate weight of edges from node to each neighboring community
+                // (including the node's own current community for comparison)
                 Map<String, Double> commWeights = new HashMap<>();
                 for (Edge e : graph.getEdges(nodeId)) {
                     String neighborComm = communities.get(e.getTarget().getId());
-                    if (neighborComm.equals(currentComm))
-                        continue;
                     commWeights.put(neighborComm, commWeights.getOrDefault(neighborComm, 0.0) + e.getWeight());
                 }
+
+                String bestComm = currentComm;
+                double maxModularityGain = 0.0;
+
+                // Also evaluate staying in currentComm vs moving
+                double k_i_in_current = commWeights.getOrDefault(currentComm, 0.0);
+                double tot_current = tot.getOrDefault(currentComm, 0.0);
+                double gainStay = k_i_in_current - resolution * (tot_current * nodeWeight) / (2 * m);
 
                 // Find best community to join
                 for (Map.Entry<String, Double> entry : commWeights.entrySet()) {
                     String candidateComm = entry.getKey();
-                    double k_i_in = entry.getValue();
-                    double tot_candidate = tot.get(candidateComm);
+                    if (candidateComm.equals(currentComm)) continue;
 
-                    // Modularity gain formula
-                    double gain = (k_i_in - resolution * (tot_candidate * nodeWeight) / (2 * m));
+                    double k_i_in = entry.getValue();
+                    double tot_candidate = tot.getOrDefault(candidateComm, 0.0);
+
+                    // Modularity gain relative to staying
+                    double gain = (k_i_in - resolution * (tot_candidate * nodeWeight) / (2 * m)) - gainStay;
 
                     if (gain > maxModularityGain) {
                         maxModularityGain = gain;

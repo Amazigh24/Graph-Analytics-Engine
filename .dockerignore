@@ -1,0 +1,9 @@
+target/
+node_modules/
+.git
+*.md
+.vscode
+.env
+graph-data/
+frontend/dist/
+frontend/node_modules/

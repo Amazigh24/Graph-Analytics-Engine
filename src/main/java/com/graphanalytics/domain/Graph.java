@@ -12,6 +12,10 @@ public interface Graph {
 
     void addUndirectedEdge(String sourceId, String targetId, double weight);
 
+    boolean removeNode(String nodeId);
+
+    boolean removeEdge(String sourceId, String targetId);
+
     Optional<Node> getNode(String id);
 
     Collection<Node> getNodes();

@@ -13,6 +13,7 @@ import java.util.*;
  */
 public class BetweennessCentralityAlgorithm implements GraphAlgorithm<Map<String, Double>> {
 
+    private static final double EPSILON = 1e-10;
     private final boolean isWeighted;
 
     public BetweennessCentralityAlgorithm(boolean isWeighted) {
@@ -121,13 +122,13 @@ public class BetweennessCentralityAlgorithm implements GraphAlgorithm<Map<String
                 double weight = edge.getWeight();
                 double newDist = d.get(v) + weight;
 
-                if (newDist < d.get(w)) {
+                if (newDist < d.get(w) - EPSILON) {
                     d.put(w, newDist);
                     Q.add(new NodeDistance(w, newDist));
                     sigma.put(w, sigma.get(v));
                     P.get(w).clear();
                     P.get(w).add(v);
-                } else if (newDist == d.get(w)) {
+                } else if (Math.abs(newDist - d.get(w)) < EPSILON) {
                     sigma.put(w, sigma.get(w) + sigma.get(v));
                     P.get(w).add(v);
                 }

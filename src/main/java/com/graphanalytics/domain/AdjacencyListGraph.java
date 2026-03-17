@@ -55,8 +55,21 @@ public class AdjacencyListGraph implements Graph {
     public void addUndirectedEdge(String sourceId, String targetId, double weight) {
         lock.writeLock().lock();
         try {
-            addEdge(sourceId, targetId, weight);
-            addEdge(targetId, sourceId, weight);
+            Node source = nodes.get(sourceId);
+            Node target = nodes.get(targetId);
+
+            if (source == null || target == null) {
+                throw new IllegalArgumentException("Source or target node does not exist in the graph");
+            }
+
+            Edge forward = new Edge(source, target, weight);
+            Edge reverse = new Edge(target, source, weight);
+
+            adjacencyList.get(sourceId).add(forward);
+            incomingEdges.get(targetId).add(forward);
+
+            adjacencyList.get(targetId).add(reverse);
+            incomingEdges.get(sourceId).add(reverse);
         } finally {
             lock.writeLock().unlock();
         }
@@ -83,11 +96,54 @@ public class AdjacencyListGraph implements Graph {
     }
 
     @Override
+    public boolean removeNode(String nodeId) {
+        lock.writeLock().lock();
+        try {
+            if (!nodes.containsKey(nodeId)) return false;
+
+            // Remove all edges from/to this node
+            adjacencyList.getOrDefault(nodeId, Collections.emptyList()).clear();
+            incomingEdges.getOrDefault(nodeId, Collections.emptyList()).clear();
+
+            // Remove edges referencing this node from other lists
+            for (List<Edge> edgeList : adjacencyList.values()) {
+                edgeList.removeIf(e -> e.getTarget().getId().equals(nodeId));
+            }
+            for (List<Edge> edgeList : incomingEdges.values()) {
+                edgeList.removeIf(e -> e.getSource().getId().equals(nodeId));
+            }
+
+            adjacencyList.remove(nodeId);
+            incomingEdges.remove(nodeId);
+            nodes.remove(nodeId);
+            return true;
+        } finally {
+            lock.writeLock().unlock();
+        }
+    }
+
+    @Override
+    public boolean removeEdge(String sourceId, String targetId) {
+        lock.writeLock().lock();
+        try {
+            List<Edge> outEdges = adjacencyList.get(sourceId);
+            List<Edge> inEdges = incomingEdges.get(targetId);
+            if (outEdges == null || inEdges == null) return false;
+
+            boolean removed = outEdges.removeIf(e -> e.getTarget().getId().equals(targetId));
+            inEdges.removeIf(e -> e.getSource().getId().equals(sourceId));
+            return removed;
+        } finally {
+            lock.writeLock().unlock();
+        }
+    }
+
+    @Override
     public List<Edge> getEdges(String nodeId) {
         lock.readLock().lock();
         try {
             List<Edge> edges = adjacencyList.get(nodeId);
-            return edges == null ? Collections.emptyList() : Collections.unmodifiableList(new ArrayList<>(edges));
+            return edges == null ? Collections.emptyList() : Collections.unmodifiableList(edges);
         } finally {
             lock.readLock().unlock();
         }
@@ -97,7 +153,7 @@ public class AdjacencyListGraph implements Graph {
         lock.readLock().lock();
         try {
             List<Edge> edges = incomingEdges.get(nodeId);
-            return edges == null ? Collections.emptyList() : Collections.unmodifiableList(new ArrayList<>(edges));
+            return edges == null ? Collections.emptyList() : Collections.unmodifiableList(edges);
         } finally {
             lock.readLock().unlock();
         }
